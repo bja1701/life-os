@@ -15,7 +15,6 @@ import { fetchCalendarEvents } from '@/app/actions/calendar';
 import GoalInput from '@/components/GoalInput';
 import GoalList from '@/components/GoalList';
 import HabitManager from '@/components/HabitManager';
-import { seedChaosData } from '@/app/actions/chaos';
 import {
   DndContext,
   DragEndEvent,
@@ -249,7 +248,6 @@ export default function DashboardPage() {
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [goalRefreshTrigger, setGoalRefreshTrigger] = useState(0);
   const [isGeneratingWeekly, setIsGeneratingWeekly] = useState(false);
-  const [isChaotic, setIsChaotic] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'today' | 'unscheduled' | 'upcoming'>('today');
   const [showWeeklyReview, setShowWeeklyReview] = useState(false);
 
@@ -284,19 +282,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleChaos = async () => {
-    if (!confirm("⚠️ WARNING: This will flood your account with 50+ tasks. Are you sure you want to stress test?")) return;
-    setIsChaotic(true);
-    try {
-      const msg = await seedChaosData();
-      alert(msg);
-      setGoalRefreshTrigger(p => p + 1);
-    } catch (e: any) {
-      alert("Chaos Failed: " + e.message);
-    } finally {
-      setIsChaotic(false);
-    }
-  };
+
 
   const handleCompleteTask = async (taskId: string) => {
     // Find current status
@@ -534,14 +520,6 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleChaos}
-              disabled={isChaotic}
-              className="text-[10px] bg-red-50 text-red-600 hover:bg-red-100 px-2 py-1 rounded transition-colors"
-              title="Stress Test System"
-            >
-              {isChaotic ? '🧨 Sploding...' : '💣 Chaos'}
-            </button>
             <button
               onClick={handleGenerateWeekly}
               disabled={isGeneratingWeekly}
@@ -1066,10 +1044,12 @@ export default function DashboardPage() {
         }
 
         {/* OVERLAY: Weekly Review */}
-        {showWeeklyReview && (
-          <WeeklyReview onClose={() => setShowWeeklyReview(false)} />
-        )}
-      </div>
+        {
+          showWeeklyReview && (
+            <WeeklyReview onClose={() => setShowWeeklyReview(false)} />
+          )
+        }
+      </div >
     </>
   );
 }
