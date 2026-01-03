@@ -76,19 +76,21 @@ interface DbTask {
 }
 
 function dbTaskToSchedulerTask(dbTask: DbTask): Task {
+  const tierMap: Record<'High' | 'Medium' | 'Low', 'critical' | 'core' | 'backlog'> = {
+    'High': 'critical',
+    'Medium': 'core',
+    'Low': 'backlog'
+  };
+
   return {
     id: dbTask.id,
     goalId: dbTask.goal_id,
     title: dbTask.title,
     durationMinutes: dbTask.duration_minutes,
     deadline: dbTask.deadline ? new Date(dbTask.deadline) : undefined,
-    priority: dbTask.priority,
-    minChunkSize: dbTask.min_chunk_size,
-    maxChunkSize: dbTask.max_chunk_size,
-    contextTags: dbTask.context_tags as ContextTag[],
-    energyLevel: dbTask.energy_level,
-    isAssignment: dbTask.is_assignment,
+    priority_tier: tierMap[dbTask.priority] || 'core',
     canSplit: dbTask.can_split,
+    isAssignment: dbTask.is_assignment,
   };
 }
 
@@ -108,11 +110,7 @@ function getMockTasks(): Task[] {
       title: 'Deep Coding Project',
       durationMinutes: 180,
       deadline: tomorrow,
-      priority: 'High',
-      minChunkSize: 60,
-      maxChunkSize: 120,
-      contextTags: ['#home', '#deep-work'],
-      energyLevel: 'deep',
+      priority_tier: 'critical',
       isAssignment: true,
       canSplit: true,
     },
@@ -121,11 +119,7 @@ function getMockTasks(): Task[] {
       title: 'Review Lecture Notes',
       durationMinutes: 45,
       deadline: tomorrow,
-      priority: 'Medium',
-      minChunkSize: 30,
-      maxChunkSize: 60,
-      contextTags: ['#anywhere'],
-      energyLevel: 'shallow',
+      priority_tier: 'core',
       isAssignment: false,
       canSplit: false,
     },
@@ -165,7 +159,7 @@ async function syncToday(options: { dryRun: boolean; clearFirst: boolean }) {
   // STEP 2: Fetch calendar events (READ)
   // ----------------------------------------
   console.log('\n📋 STEP 1: Fetching calendar events...');
-  
+
   let fixedEvents: FixedEvent[] = [];
   try {
     fixedEvents = await getAllCalendarEvents(startDate, endDate, {
@@ -173,7 +167,7 @@ async function syncToday(options: { dryRun: boolean; clearFirst: boolean }) {
       byuIcalUrl: process.env.BYU_ICAL_URL,
     });
     console.log(`   ✅ Found ${fixedEvents.length} calendar events`);
-    
+
     if (fixedEvents.length > 0) {
       console.log('   Events:');
       fixedEvents.slice(0, 5).forEach(event => {
@@ -192,7 +186,7 @@ async function syncToday(options: { dryRun: boolean; clearFirst: boolean }) {
   // STEP 3: Fetch tasks from Supabase (READ)
   // ----------------------------------------
   console.log('\n📋 STEP 2: Fetching tasks from Supabase...');
-  
+
   let tasks: Task[] = [];
   try {
     const supabase = getSupabaseClient();
@@ -207,12 +201,12 @@ async function syncToday(options: { dryRun: boolean; clearFirst: boolean }) {
     if (data && data.length > 0) {
       tasks = data.map(dbTaskToSchedulerTask);
       console.log(`   ✅ Found ${tasks.length} tasks`);
-      
+
       tasks.forEach(task => {
-        const deadline = task.deadline 
-          ? task.deadline.toLocaleDateString() 
+        const deadline = task.deadline
+          ? task.deadline.toLocaleDateString()
           : 'No deadline';
-        console.log(`      • [${task.priority}] ${task.title} (${task.durationMinutes} mins) - ${deadline}`);
+        console.log(`      • [${task.priority_tier}] ${task.title} (${task.durationMinutes} mins) - ${deadline}`);
       });
     } else {
       console.log('   ⚠️  No tasks found in database, using mock tasks for demo');
@@ -236,7 +230,7 @@ async function syncToday(options: { dryRun: boolean; clearFirst: boolean }) {
   // STEP 4: Generate schedule (THINK)
   // ----------------------------------------
   console.log('\n📋 STEP 3: Running scheduler algorithm...');
-  
+
   const result = generateSchedule(fixedEvents, tasks, {
     dayStartHour: 8,
     dayEndHour: 22,
@@ -245,14 +239,14 @@ async function syncToday(options: { dryRun: boolean; clearFirst: boolean }) {
   });
 
   console.log(`   ✅ Generated ${result.scheduledBlocks.length} scheduled blocks`);
-  
+
   if (result.scheduledBlocks.length > 0) {
     console.log('   Schedule:');
     result.scheduledBlocks.forEach(block => {
       const date = block.start.toLocaleDateString();
       const time = block.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const chunk = block.totalChunks && block.totalChunks > 1 
-        ? ` [${(block.chunkIndex ?? 0) + 1}/${block.totalChunks}]` 
+      const chunk = block.totalChunks && block.totalChunks > 1
+        ? ` [${(block.chunkIndex ?? 0) + 1}/${block.totalChunks}]`
         : '';
       const virtual = block.isVirtual ? ' (Virtual)' : '';
       console.log(`      • ${date} ${time} - ${block.taskTitle}${chunk} (${block.durationMinutes} mins)${virtual}`);
@@ -277,7 +271,7 @@ async function syncToday(options: { dryRun: boolean; clearFirst: boolean }) {
   // STEP 5: Export to Google Calendar (WRITE)
   // ----------------------------------------
   console.log('\n📋 STEP 4: Exporting to Google Calendar...');
-  
+
   const exportResult = await exportScheduleToGoogle(result.scheduledBlocks, options.dryRun);
 
   // ----------------------------------------
@@ -293,13 +287,13 @@ async function syncToday(options: { dryRun: boolean; clearFirst: boolean }) {
   console.log(`   Warnings:           ${result.warnings.length}`);
   console.log(`   Errors:             ${exportResult.errors.length}`);
   console.log('='.repeat(60));
-  
+
   if (exportResult.success) {
     console.log('✅ Sync completed successfully!');
   } else {
     console.log('⚠️  Sync completed with errors');
   }
-  
+
   console.log('\n');
 }
 
